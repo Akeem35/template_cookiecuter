@@ -1,0 +1,9 @@
+{
+    "directory_name": "Hello",
+    "file_name": "Howdy",
+    "greeting_recipient": "Julie",
+    "license": ["MIT", "BSD-3", "GNU GPL v3.0", "Apache Software License 2.0"],
+    "_copy_without_render": [
+        "*.yml"
+    ]
+}

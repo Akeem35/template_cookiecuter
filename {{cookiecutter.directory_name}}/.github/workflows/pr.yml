@@ -1,0 +1,89 @@
+name: PR
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths-ignore:
+    - '**.md'
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Unit-Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      
+      - name: Set up JDK
+        uses: actions/setup-java@v2
+        with:
+          distribution: adopt
+          java-version: 11
+          cache: maven
+          
+      - name: Spin up Docker For Tests
+        run: |
+          docker build -t postgis-it docker
+          docker run -e POSTGRES_PASSWORD=postgres -e POSTGRES_USER=postgres -p 5432:5432 -d --name postgis-it postgis-it
+      - name: Cache SonarCloud packages
+        uses: actions/cache@v2
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+
+#      - uses: actions/cache@v1
+#        name: Cache Dependencies
+#        id: cache-deps
+#        with:
+#          path: ~/.m2/repository
+#          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+#          restore-keys: |
+#            ${{ runner.os }}-maven-
+#
+#      - name: Maven Resolve Dependencies
+#        if: steps.cache-deps.outputs.cache-hit != 'true'
+#        run: mvn dependency:go-offline -s .github/workflows/settings.xml -e
+#        env:
+#          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_KEY }}
+#          AWS_SECRET_KEY: ${{ secrets.AWS_SECRET }}
+
+      - name: Build and analyze
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_KEY }}
+          AWS_SECRET_KEY: ${{ secrets.AWS_SECRET }}
+          SPRING_DATASOURCE_URL: ${{ secrets.SPRING_DATASOURCE_URL }}
+          SPRING_DATASOURCE_PASSWORD: ${{ secrets.SPRING_DATASOURCE_PASSWORD }}
+          SPRING_DATASOURCE_USERNAME: ${{ secrets.SPRING_DATASOURCE_USERNAME }}
+          SECRET_KEY : ${{ secrets.SECRET_KEY }}
+          JWT_API_KEY : ${{ secrets.JWT_API_KEY }}
+        run: mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=setnotes_api -Dsonar.qualitygate.wait=true -s .github/workflows/settings.xml
+      
+      - name: trufflehog-actions-scan
+        uses: edplato/trufflehog-actions-scan@master
+        with:
+          scanArguments: "--regex --entropy=False --max_depth=5 --rules /regexes.json"
+        
+      - name: Maven Verify
+        run: mvn -B package verify -s .github/workflows/settings.xml -e
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_KEY }}
+          AWS_SECRET_KEY: ${{ secrets.AWS_SECRET }}
+          SPRING_DATASOURCE_URL: ${{ secrets.SPRING_DATASOURCE_URL }}
+          SPRING_DATASOURCE_PASSWORD: ${{ secrets.SPRING_DATASOURCE_PASSWORD }}
+          SPRING_DATASOURCE_USERNAME: ${{ secrets.SPRING_DATASOURCE_USERNAME }}
+          SECRET_KEY : ${{ secrets.SECRET_KEY }}
+          JWT_API_KEY : ${{ secrets.JWT_API_KEY }}
+
+#      - uses: codecov/codecov-action@v2
+#        with:
+#          token: ${{ secrets.CODECOV_TOKEN }}
+#          files: ./target/jacoco-ut/jacoco.xml
+#          name: codecov-set-todolists-api
+#          fail_ci_if_error: false
+#          verbose: true
